@@ -28,25 +28,38 @@ import csv
 from enum import Enum, auto
 from pathlib import Path
 
-from cerberus import Validator
+# I rename this to Processor to avoid confusion with the validator schema type processor.
+# And besides, I'm abusing cerberus so much already it's far past being just a Validator.
+from cerberus import Validator as Processor
 
 
 class MungeFailureException(Exception):
     pass
 
 
+class SchemaType(Enum):
+    FILTER = auto()
+    COERCE = auto()
+    VALIDATE = auto()
+
+
 class Hook(Enum):
     FAILED_FILTER = auto()
     FAILED_COERCION = auto()
     FAILED_VALIDATION = auto()
-    VALID = auto()
+    END = auto()
 
 
 class Munger:
     """Filters, coerces and validates one document (row of data)"""
 
     def __init__(self):
-        self.hooks = {}
+        # Initialize all Processors to None; all are optional
+        self.filterer = None
+        self.coercer = None
+        self.validator = None
+
+        self.hooks = {hook_type: [] for hook_type in Hook}
         self.writer_files = []
         self._source_data_initialized = None
 
@@ -58,7 +71,7 @@ class Munger:
 
     def _close_all_files(self):
         files = self.writer_files
-        if self._source_data_initalized:
+        if self._source_data_initialized:
             files.append(self.source_file)
 
         for file in files:
@@ -66,9 +79,26 @@ class Munger:
                 file.close()
 
     def set_source_data(self, filename):
+        self.source_filename = filename
         self.source_file = open(filename, "r")
         self.source_reader = csv.DictReader(self.source_file)
-        self._source_data_initalized = True
+        self._source_data_initialized = True
+
+    def set_schema(
+        self, schema_type: SchemaType, schema: dict, allow_unknown: bool = False
+    ):
+        """Creates a processor of the chosen type using the passed schema"""
+        if schema_type == SchemaType.FILTER:
+            self.filterer = Processor(schema, allow_unknown=allow_unknown)
+
+        elif schema_type == SchemaType.COERCE:
+            self.coercer = Processor(schema, allow_unknown=allow_unknown)
+
+        elif schema_type == SchemaType.VALIDATE:
+            self.validator = Processor(schema, allow_unknown=allow_unknown)
+
+        else:
+            raise TypeError(f"Unrecognized schema type: {schema_type}")
 
     def register_writer(
         self,
@@ -93,20 +123,18 @@ class Munger:
                 "Cannot register a writer until source data is intialized"
             )
 
+        # TODO give a warning if hooking to an event for a validator type that isn't registered
+
         if filename is None and suffix is None:
             raise TypeError("filename OR suffix must be given")
 
         if filename is not None and suffix is not None:
             raise TypeError("Only one of filename or suffix may be given")
 
-        # Initialize the hook
-        if event not in self.hooks:
-            self.hooks[event] = []
-
         # Initialize the writer
         if not filename:
-            sf_path = Path(self.source_file)
-            filename = sf_path.parent / (sf_path.stem + suffix + sf_path.suffix)
+            sf_path = Path(self.source_filename)
+            filename = sf_path.parent / (sf_path.stem + "-" + suffix + sf_path.suffix)
 
         fieldnames = self.source_reader.fieldnames[:]
         if include_errors and event in (
@@ -118,6 +146,7 @@ class Munger:
 
         writer_file = open(filename, "w")
         writer = csv.DictWriter(writer_file, fieldnames=fieldnames)
+        writer.writeheader()
         self.writer_files.append(writer_file)
 
         # Register the function
@@ -126,28 +155,66 @@ class Munger:
         )
 
     def _write_func(self, writer, condition=None, include_errors=False):
-        def write(validator):
-            output = validator.document.copy()
+        def write(processor):
+            # if this has already been written to a different log, return
+            if self._doc_has_been_written:
+                return
+
+            output = processor.document.copy()
             if include_errors:
-                output["ValidationErrors"] = str(validator.document_error_tree)
+                output["ValidationErrors"] = str(processor.errors)
 
             if condition is None:
                 writer.writerow(output)
+                self._doc_has_been_written = True
             else:
-                if condition(validator):
+                if condition(processor):
                     writer.writerow(output)
+                    self._doc_has_been_written = True
 
         return write
 
     def munge(self, data):
+        # Bool flag to prevent a doc from being written with multiple writers
+        # TODO consider a writer option to allow cascading writes
+        self._doc_has_been_written = False
+
         try:
-            data = self.filter(data)
-            data = self.coerce(data)
-            data = self.validate(data)
+            if self.filterer is not None:
+                data = self.filter(data)
+                last_used_processor = self.filterer
+
+            if self.coercer is not None:
+                data = self.coerce(data)
+                last_used_processor = self.coercer
+
+            if self.validator is not None:
+                data = self.validate(data)
+                last_used_processor = self.validator
+
         except MungeFailureException:
             return None
 
+        for func in self.hooks[Hook.END]:
+            # This needs the most recently used Processor
+            func(last_used_processor)
+
         return data
+
+    def munge_all(self):
+        if all(
+            processor is None
+            for processor in (self.filterer, self.coercer, self.validator)
+        ):
+            raise RuntimeError(
+                "Must register at least one schema or validator to munge"
+            )
+
+        for row in self.source_reader:
+            try:
+                data = self.munge(row)
+            except MungeFailureException:
+                continue
 
     def filter(self, data):
         filtered = self.filterer.validated(data)
@@ -182,9 +249,6 @@ class Munger:
 
             raise MungeFailureException("Failed validation")
 
-        for func in self.hooks[Hook.VALID]:
-            func(self.validator)
-
         return validated
 
 
@@ -200,16 +264,16 @@ if __name__ == "__main__":
     m = Munger()
 
     """
-    A schema or validator object must be registered for each step:
+    A schema or processor object must be registered for each step:
     1. Filter -- Strip the source data down to the relevant documents
     2. Coercion -- All the steps of converting the data to the form that you need (defined in validation schema)
     3. Validation -- Compare the coerced data to the validation schema
 
     Attempting to call munge() will raise an exception if these three are not set.
     """
-    m.register_schema("filter", filter_schema)
-    m.register_validator("coercion", CustomCoercionValidator(coercion_schema))
-    m.register_schema("validation", validation_schemas.UDS_A_RECORD)
+    m.set_schema(SchemaType.FILTER, filter_schema)
+    m.register_processor(SchemaType.COERCE, CustomCoercionProcessor(coercion_schema))
+    m.set_schema(SchemaType.VALIDATE, schemas.UDS_A_RECORD)
 
     """
     Multiple writers can be registered and attached to various hooks in the munging process.
@@ -226,32 +290,35 @@ if __name__ == "__main__":
     FAILED_COERCION - since there's no validation here, this would be for rows that raise an error with the given coercion functions. Maybe pointless?
     FAILED_VALIDATION - for rows that were coerced but still don't fit the data
 
-    (NOTE: I'd like to include the validator.errors or validator.document_error_tree in the writer for FAILED_VALIDATION.)
+    (NOTE: I'd like to include the processor.errors or processor.document_error_tree in the writer for FAILED_VALIDATION.)
     (NOTE: Where is the responsibility for assigning filename, fieldnames, etc? If I add the errors, I feel like the register_writer() function should
         add the error-holding field so it nows where to put them.)
 
     Can be given either a filename (str or Path) or a suffix. If given suffix, it will be appended to the source file name before the extension.
+
+    Writers connected to the same hook should be defined in order of precedence. eg. If you want a writer to preferentially get lines based on a condition,
+    register it before the conditionless writer.
+
+    (NOTE: Maybe I should give an optional priority/weight argument for writers?)
     """
 
     # writer for CSV output
-    m.register_writer(hook=hooks.VALID, suffix="valid")
+    m.register_writer(hook=Hook.END, suffix="valid")
 
     # writer to catalogue validation errors
-    m.register_writer(hooks.FAILED_VALIDATION, filename="invalid_items.csv")
+    m.register_writer(Hook.FAILED_VALIDATION, filename="invalid_items.csv")
 
     # writer that captures rows that didn't make the filter
-    m.register_writer(hooks.FAILED_FILTER, suffix="filtered")
+    m.register_writer(Hook.FAILED_FILTER, suffix="filtered")
 
-    def has_changed_filename(validator: cerberus.Validator) -> bool:
+    def has_changed_filename(processor: Processor) -> bool:
         return (
-            validator.document["Orig_DocumentFileName"]
-            != validator.document["DocumentFileName"]
+            processor.document["Orig_DocumentFileName"]
+            != processor.document["DocumentFileName"]
         )
 
     # writer that diverts valid rows with differing filenames
-    m.register_writer(
-        hooks.VALID, suffix="file_changed", condition=has_changed_filename
-    )
+    m.register_writer(Hook.END, suffix="file_changed", condition=has_changed_filename)
 
     # assign the input file
     m.source_file = inputfile
