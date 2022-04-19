@@ -10,6 +10,12 @@ class Writer:
         self.condition = condition
         self.include_errors = include_errors
 
+    def __exit__(self, exception_type, exception_value, exception_traceback):
+        self.file.close()
+
+    def __del__(self):
+        self.file.close()
+
     def _open_file(self, filename: str):
         self.file = open(filename, "w")
         # will initialize fieldnames before first write
