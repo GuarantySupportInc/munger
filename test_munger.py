@@ -1,5 +1,5 @@
 from decimal import BasicContext
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from io import StringIO
 from pathlib import Path
 
@@ -16,7 +16,8 @@ BASIC_VALIDATION_SCHEMA = {
 
 
 @patch("munger.open")
-def test_munger_can_initialize(mock_open):
+@patch("writer.open")
+def test_munger_can_initialize(mock_writer_open, mock_open):
     mock_open.return_value = StringIO(BASIC_CSV)
 
     m = Munger()
@@ -28,7 +29,7 @@ def test_munger_can_initialize(mock_open):
     m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
 
     # register a valid writer
-    mock_open.return_value = StringIO()
+    mock_writer_open.return_value = StringIO()
     m.register_writer(Hook.END, filename="output.csv")
 
 
@@ -39,8 +40,10 @@ def test_munger_raises_exception_if_registering_a_schema_with_string():
         m.set_schema("validation", BASIC_VALIDATION_SCHEMA)
 
 
+# multiple patches must be given as args in opposite order
 @patch("munger.open")
-def test_munger_can_munge_a_simple_doc(mock_open):
+@patch("writer.open")
+def test_munger_can_munge_a_simple_doc(mock_writer_open, mock_open):
     mock_open.return_value = StringIO(BASIC_CSV)
 
     m = Munger()
@@ -50,14 +53,15 @@ def test_munger_can_munge_a_simple_doc(mock_open):
 
     # register a valid writer
     output = StringIO()
-    mock_open.return_value = output
+    mock_writer_open.return_value = output
     m.register_writer(Hook.END, filename="output.csv")
 
     # munge the doc
     m.munge_all()
 
-    # silly but since I'm writing on windows it uses \r\n for line breaks
+    # CSV Writer always outputs \r\n
     result = output.getvalue().replace("\r", "")
+    # assert writer.write.call_count == 4
     assert result == BASIC_CSV
 
 
@@ -84,7 +88,8 @@ def test_munger_raises_exception_if_filename_and_suffix_are_both_passed_for_writ
 
 
 @patch("munger.open")
-def test_munger_will_split_writes_according_to_a_condition(mock_open):
+@patch("writer.open")
+def test_munger_will_split_writes_according_to_a_condition(mock_writer_open, mock_open):
     m = Munger()
 
     mock_open.return_value = StringIO(BASIC_CSV)
@@ -95,11 +100,11 @@ def test_munger_will_split_writes_according_to_a_condition(mock_open):
         return int(processor.document["Field"]) % 2 == 0
 
     condition_sio = StringIO()
-    mock_open.return_value = condition_sio
+    mock_writer_open.return_value = condition_sio
     m.register_writer(Hook.END, filename="condition.csv", condition=is_even)
 
     valid_sio = StringIO()
-    mock_open.return_value = valid_sio
+    mock_writer_open.return_value = valid_sio
     m.register_writer(Hook.END, filename="valid.csv")
 
     m.munge_all()
@@ -116,7 +121,8 @@ def test_munger_will_split_writes_according_to_a_condition(mock_open):
 
 
 @patch("munger.open")
-def test_munger_will_include_errors(mock_open):
+@patch("writer.open")
+def test_munger_will_include_errors(mock_writer_open, mock_open):
     m = Munger()
 
     modified_csv = BASIC_CSV.replace("4,d", "4,dog")
@@ -126,11 +132,11 @@ def test_munger_will_include_errors(mock_open):
     m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
 
     valid_sio = StringIO()
-    mock_open.return_value = valid_sio
+    mock_writer_open.return_value = valid_sio
     m.register_writer(Hook.END, filename="bear.csv")
 
     invalid_sio = StringIO()
-    mock_open.return_value = invalid_sio
+    mock_writer_open.return_value = invalid_sio
     m.register_writer(
         Hook.FAILED_VALIDATION, filename="invalid.csv", include_errors=True
     )
@@ -147,13 +153,16 @@ def test_munger_will_include_errors(mock_open):
 
 
 @patch("munger.open")
-def test_munger_raises_an_exception_if_trying_to_munge_with_no_processors(mock_open):
+@patch("writer.open")
+def test_munger_raises_an_exception_if_trying_to_munge_with_no_processors(
+    mock_writer_open, mock_open
+):
     m = Munger()
 
     mock_open.return_value = StringIO(BASIC_CSV)
     m.set_source_data("fish.csv")
 
-    mock_open.return_value = StringIO()
+    mock_writer_open.return_value = StringIO()
     m.register_writer(Hook.END, filename="output.csv")
 
     with pytest.raises(RuntimeError):
@@ -161,7 +170,8 @@ def test_munger_raises_an_exception_if_trying_to_munge_with_no_processors(mock_o
 
 
 @patch("munger.open")
-def test_munger_can_filter_data(mock_open):
+@patch("writer.open")
+def test_munger_can_filter_data(mock_writer_open, mock_open):
     m = Munger()
 
     mock_open.return_value = StringIO(BASIC_CSV)
@@ -175,11 +185,11 @@ def test_munger_can_filter_data(mock_open):
     m.set_schema(SchemaType.FILTER, filter_schema, allow_unknown=True)
 
     output = StringIO()
-    mock_open.return_value = output
+    mock_writer_open.return_value = output
     m.register_writer(Hook.END, filename="output.csv")
 
     filtered = StringIO()
-    mock_open.return_value = filtered
+    mock_writer_open.return_value = filtered
     m.register_writer(Hook.FAILED_FILTER, filename="filtered.csv")
 
     m.munge_all()
@@ -196,19 +206,22 @@ def test_munger_can_filter_data(mock_open):
 
 
 @patch("munger.open")
-def test_munger_inserts_writer_suffixes_into_source_filename(mock_open):
+@patch("writer.open")
+def test_munger_inserts_writer_suffixes_into_source_filename(
+    mock_writer_open, mock_open
+):
     m = Munger()
 
     mock_open.return_value = StringIO(BASIC_CSV)
     m.set_source_data("../indexes/fish.csv")
 
     output = StringIO()
-    mock_open.return_value = output
+    mock_writer_open.return_value = output
     m.register_writer(Hook.END, suffix="cleaned")
 
     # why 0 to access args? i dunno
-    mock_open.assert_called()
-    res_path, _ = mock_open.call_args[0]
+    mock_writer_open.assert_called()
+    res_path, _ = mock_writer_open.call_args[0]
     exp_path = Path("../indexes/fish-cleaned.csv")
     # converting to string normalizes Windows/Linux paths
     assert str(res_path) == str(exp_path)
