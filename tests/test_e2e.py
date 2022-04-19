@@ -65,6 +65,7 @@ def test_munger_can_munge_a_simple_doc(mock_writer_open, mock_open):
     assert result == BASIC_CSV
 
 
+# NOTE: This is probably unnecessary now since fieldname definition is lazy
 def test_munger_will_not_register_a_writer_without_a_source_file():
     m = Munger()
 
@@ -225,3 +226,74 @@ def test_munger_inserts_writer_suffixes_into_source_filename(
     exp_path = Path("../indexes/fish-cleaned.csv")
     # converting to string normalizes Windows/Linux paths
     assert str(res_path) == str(exp_path)
+
+
+@patch("munger.munger.open")
+@patch("munger.writer.open")
+def test_munger_maps_fields_to_new_keys(mock_writer_open, mock_open):
+    m = Munger()
+
+    mock_open.return_value = StringIO(BASIC_CSV)
+    m.set_source_data("input.csv")
+
+    coercion_schema = {
+        "Field": {"map_to": "Frog"},
+        "OtherField": {"map_to": ("OtherField", "Bear")},
+    }
+    m.set_schema(SchemaType.COERCE, coercion_schema, allow_unknown=True)
+
+    output = StringIO()
+    mock_writer_open.return_value = output
+    m.register_writer(Hook.END, "munged")
+    m.munge_all()
+
+    result = output.getvalue().replace("\r", "")
+    # Renamed fields are added to the end of the fields
+    # If a field is not renamed, it keeps its position
+    expected = "OtherField,Frog,Bear\na,1,a\nb,2,b\nc,3,c\nd,4,d\n"
+    assert result == expected
+
+
+@patch("munger.munger.open")
+@patch("munger.writer.open")
+def test_munger_can_coerce(mock_writer_open, mock_open):
+    m = Munger()
+
+    mock_open.return_value = StringIO(BASIC_CSV)
+    m.set_source_data("input.csv")
+
+    coercion_schema = {"OtherField": {"coerce": lambda string: string.upper()}}
+    m.set_schema(SchemaType.COERCE, coercion_schema, allow_unknown=True)
+
+    output = StringIO()
+    mock_writer_open.return_value = output
+    m.register_writer(Hook.END, "munged")
+    m.munge_all()
+
+    result = output.getvalue().replace("\r", "")
+    expected = "Field,OtherField\n1,A\n2,B\n3,C\n4,D\n"
+    assert result == expected
+
+
+@patch("munger.munger.open")
+@patch("munger.writer.open")
+def test_munger_chaining_map_to_and_coercions(mock_writer_open, mock_open):
+    m = Munger()
+
+    mock_open.return_value = StringIO(BASIC_CSV)
+    m.set_source_data("input.csv")
+
+    coercion_schema = {
+        "OtherField": {"map_to": "Frog"},
+        "Frog": {"coerce": lambda string: string.upper()},
+    }
+    m.set_schema(SchemaType.COERCE, coercion_schema, allow_unknown=True)
+
+    output = StringIO()
+    mock_writer_open.return_value = output
+    m.register_writer(Hook.END, "munged")
+    m.munge_all()
+
+    result = output.getvalue().replace("\r", "")
+    expected = "Field,Frog\n1,A\n2,B\n3,C\n4,D\n"
+    assert result == expected
