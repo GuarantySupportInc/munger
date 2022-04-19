@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import cerberus
 
 
@@ -17,8 +18,10 @@ class Processor(cerberus.Validator):
             if isinstance(target_fields, str):
                 mapping[target_fields] = mapping[field]
                 del mapping[field]
-            else:
+            elif isinstance(target_fields, Iterable):
                 for target_field in target_fields:
                     mapping[target_field] = mapping[field]
                 if field not in target_fields:
                     del mapping[field]
+            else:
+                raise ValueError("Rename only accepts a string or iterable of strings")
