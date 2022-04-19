@@ -30,8 +30,8 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from processor import Processor
-from writer import Writer
+from .processor import Processor
+from .writer import Writer
 
 
 class MungeFailureException(Exception):

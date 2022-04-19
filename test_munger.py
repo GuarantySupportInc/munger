@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from munger import Munger, Hook, SchemaType
+from munger.munger import Munger, Hook, SchemaType
 
 BASIC_CSV = "Field,OtherField\n" "1,a\n" "2,b\n" "3,c\n" "4,d\n"
 
@@ -15,8 +15,8 @@ BASIC_VALIDATION_SCHEMA = {
 }
 
 
-@patch("munger.open")
-@patch("writer.open")
+@patch("munger.munger.open")
+@patch("munger.writer.open")
 def test_munger_can_initialize(mock_writer_open, mock_open):
     mock_open.return_value = StringIO(BASIC_CSV)
 
@@ -41,8 +41,8 @@ def test_munger_raises_exception_if_registering_a_schema_with_string():
 
 
 # multiple patches must be given as args in opposite order
-@patch("munger.open")
-@patch("writer.open")
+@patch("munger.munger.open")
+@patch("munger.writer.open")
 def test_munger_can_munge_a_simple_doc(mock_writer_open, mock_open):
     mock_open.return_value = StringIO(BASIC_CSV)
 
@@ -73,7 +73,7 @@ def test_munger_will_not_register_a_writer_without_a_source_file():
         m.register_writer(Hook.END, filename="fish.csv")
 
 
-@patch("munger.open")
+@patch("munger.munger.open")
 def test_munger_raises_exception_if_filename_and_suffix_are_both_passed_for_writer(
     mock_open,
 ):
@@ -87,8 +87,8 @@ def test_munger_raises_exception_if_filename_and_suffix_are_both_passed_for_writ
         m.register_writer(Hook.END, filename="bird.csv", suffix="bird")
 
 
-@patch("munger.open")
-@patch("writer.open")
+@patch("munger.munger.open")
+@patch("munger.writer.open")
 def test_munger_will_split_writes_according_to_a_condition(mock_writer_open, mock_open):
     m = Munger()
 
@@ -120,8 +120,8 @@ def test_munger_will_split_writes_according_to_a_condition(mock_writer_open, moc
     assert condition_result == condition_expected
 
 
-@patch("munger.open")
-@patch("writer.open")
+@patch("munger.munger.open")
+@patch("munger.writer.open")
 def test_munger_will_include_errors(mock_writer_open, mock_open):
     m = Munger()
 
@@ -152,8 +152,8 @@ def test_munger_will_include_errors(mock_writer_open, mock_open):
     assert result == expected
 
 
-@patch("munger.open")
-@patch("writer.open")
+@patch("munger.munger.open")
+@patch("munger.writer.open")
 def test_munger_raises_an_exception_if_trying_to_munge_with_no_processors(
     mock_writer_open, mock_open
 ):
@@ -169,8 +169,8 @@ def test_munger_raises_an_exception_if_trying_to_munge_with_no_processors(
         m.munge_all()
 
 
-@patch("munger.open")
-@patch("writer.open")
+@patch("munger.munger.open")
+@patch("munger.writer.open")
 def test_munger_can_filter_data(mock_writer_open, mock_open):
     m = Munger()
 
@@ -205,8 +205,8 @@ def test_munger_can_filter_data(mock_writer_open, mock_open):
     assert result == expected
 
 
-@patch("munger.open")
-@patch("writer.open")
+@patch("munger.munger.open")
+@patch("munger.writer.open")
 def test_munger_inserts_writer_suffixes_into_source_filename(
     mock_writer_open, mock_open
 ):

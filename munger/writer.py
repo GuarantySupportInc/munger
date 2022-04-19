@@ -1,7 +1,7 @@
 import csv
 from typing import Callable
 
-from munger import Processor
+from .munger import Processor
 
 
 class Writer:
