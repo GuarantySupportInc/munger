@@ -62,7 +62,7 @@ class Munger:
 
         # for callback functions?
         self.hooks = {hook_type: [] for hook_type in Hook}
-        self.writer_files = []
+
         self.writers = {hook_type: [] for hook_type in Hook}
         self._source_data_initialized = None
 
@@ -73,13 +73,12 @@ class Munger:
         self._close_all_files()
 
     def _close_all_files(self):
-        files = self.writer_files
-        if self._source_data_initialized:
-            files.append(self.source_file)
+        for _, writers in self.writers.items():
+            for writer in writers:
+                writer.file.close()
 
-        for file in files:
-            if not file.closed:
-                file.close()
+        if self._source_data_initialized:
+            self.source_file.close()
 
     def set_source_data(self, filename):
         self.source_filename = filename
@@ -166,26 +165,6 @@ class Munger:
 
         self.writers[event].append(writer)
 
-    def _write_func(self, writer, condition=None, include_errors=False):
-        def write(processor):
-            # if this has already been written to a different log, return
-            if self._doc_has_been_written:
-                return
-
-            output = processor.document.copy()
-            if include_errors:
-                output["ValidationErrors"] = str(processor.errors)
-
-            if condition is None:
-                writer.writerow(output)
-                self._doc_has_been_written = True
-            else:
-                if condition(processor):
-                    writer.writerow(output)
-                    self._doc_has_been_written = True
-
-        return write
-
     def munge(self, data):
         # Bool flag to prevent a doc from being written with multiple writers
         # TODO consider a writer option to allow cascading writes
@@ -207,9 +186,7 @@ class Munger:
         except MungeFailureException:
             return None
 
-        for func in self.hooks[Hook.END]:
-            # This needs the most recently used Processor
-            func(last_used_processor)
+        self._run_hooks(Hook.END, last_used_processor)
 
         return data
 
@@ -233,8 +210,7 @@ class Munger:
 
         if filtered is None:
             # hook to filter_fail registered callback/writer to output this row
-            for func in self.hooks[Hook.FAILED_FILTER]:
-                func(self.filterer)
+            self._run_hooks(Hook.FAILED_FILTER, self.filterer)
 
             raise MungeFailureException("Failed during filter")
 
@@ -245,8 +221,7 @@ class Munger:
 
         if coerced is None:
             # hook to coercion_fail registered stuff
-            for func in self.hooks[Hook.FAILED_COERCION]:
-                func(self.coercer)
+            self._run_hooks(Hook.FAILED_COERCION, self.coercer)
 
             raise MungeFailureException("Failed during coercion")
 
@@ -256,12 +231,19 @@ class Munger:
         validated = self.validator.validated(data)
 
         if validated is None:
-            for func in self.hooks[Hook.FAILED_VALIDATION]:
-                func(self.validator)
+            self._run_hooks(Hook.FAILED_VALIDATION, self.validator)
 
             raise MungeFailureException("Failed validation")
 
         return validated
+
+    def _run_hooks(self, event: Hook, processor: Processor):
+        for func in self.hooks[event]:
+            func(processor)
+
+        for writer in self.writers[event]:
+            if not self._doc_has_been_written:
+                self._doc_has_been_written = writer.write(processor)
 
 
 # Usage:
