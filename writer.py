@@ -20,9 +20,14 @@ class Writer:
         self.file = open(filename, "w")
         # will initialize fieldnames before first write
         self.writer = csv.DictWriter(self.file, fieldnames=[])
-        self._fields_intialized = False
+        self._fields_initialized = False
 
-    def write(self, processor: Processor):
+    def write(self, processor: Processor) -> bool:
+        """Writes the document to file, according to initialized parameters
+
+        Returns:
+            bool - True if the doc was written
+        """
         if not self._fields_initialized:
             headers = list(processor.document.keys())
             if self.include_errors:
@@ -30,14 +35,18 @@ class Writer:
             self.writer.fieldnames = headers
             self.writer.writeheader()
 
+            self._fields_initialized = True
+
         output = processor.document.copy()
         if self.include_errors:
             output["ValidationErrors"] = str(processor.errors)
 
         if self.condition is None:
             self.writer.writerow(output)
-            # self._doc_has_been_written = True
+            return True
         else:
             if self.condition(processor):
                 self.writer.writerow(output)
-                # self._doc_has_been_written = True
+                return True
+
+        return False
