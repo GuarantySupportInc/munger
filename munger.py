@@ -31,6 +31,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from processor import Processor
+from writer import Writer
 
 
 class MungeFailureException(Exception):
@@ -59,8 +60,10 @@ class Munger:
         self.coercer = None
         self.validator = None
 
+        # for callback functions?
         self.hooks = {hook_type: [] for hook_type in Hook}
         self.writer_files = []
+        self.writers = {hook_type: [] for hook_type in Hook}
         self._source_data_initialized = None
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
@@ -153,23 +156,15 @@ class Munger:
             sf_path = Path(self.source_filename)
             filename = sf_path.parent / (sf_path.stem + "-" + suffix + sf_path.suffix)
 
-        fieldnames = self.source_reader.fieldnames[:]
-        if include_errors and event in (
+        # only include errors for failure hooks
+        include_errors = include_errors and event in (
             Hook.FAILED_VALIDATION,
             Hook.FAILED_COERCION,
             Hook.FAILED_FILTER,
-        ):
-            fieldnames.append("ValidationErrors")
-
-        writer_file = open(filename, "w")
-        writer = csv.DictWriter(writer_file, fieldnames=fieldnames)
-        writer.writeheader()
-        self.writer_files.append(writer_file)
-
-        # Register the function
-        self.hooks[event].append(
-            self._write_func(writer, condition=condition, include_errors=include_errors)
         )
+        writer = Writer(filename, condition, include_errors)
+
+        self.writers[event].append(writer)
 
     def _write_func(self, writer, condition=None, include_errors=False):
         def write(processor):
