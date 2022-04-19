@@ -237,8 +237,8 @@ def test_munger_maps_fields_to_new_keys(mock_writer_open, mock_open):
     m.set_source_data("input.csv")
 
     coercion_schema = {
-        "Field": {"map_to": "Frog"},
-        "OtherField": {"map_to": ("OtherField", "Bear")},
+        "Field": {"rename": "Frog"},
+        "OtherField": {"rename": ("OtherField", "Bear")},
     }
     m.set_schema(SchemaType.COERCE, coercion_schema, allow_unknown=True)
 
@@ -284,7 +284,7 @@ def test_munger_chaining_map_to_and_coercions(mock_writer_open, mock_open):
     m.set_source_data("input.csv")
 
     coercion_schema = {
-        "OtherField": {"map_to": "Frog"},
+        "OtherField": {"rename": "Frog"},
         "Frog": {"coerce": lambda string: string.upper()},
     }
     m.set_schema(SchemaType.COERCE, coercion_schema, allow_unknown=True)
