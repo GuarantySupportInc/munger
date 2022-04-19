@@ -100,6 +100,23 @@ class Munger:
         else:
             raise TypeError(f"Unrecognized schema type: {schema_type}")
 
+    def set_processor(self, schema_type: SchemaType, processor: Processor):
+        """Uses the given processor for the selected SchemaType
+
+        Useful if a custom processor is needed for advanced coercions/checks.
+        """
+        if schema_type == SchemaType.FILTER:
+            self.filterer = processor
+
+        elif schema_type == SchemaType.COERCE:
+            self.coercer = processor
+
+        elif schema_type == SchemaType.VALIDATE:
+            self.validator = processor
+
+        else:
+            raise TypeError(f"Unrecognized schema type: {schema_type}")
+
     def register_writer(
         self,
         event,
