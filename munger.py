@@ -31,6 +31,7 @@ from pathlib import Path
 # I rename this to Processor to avoid confusion with the validator schema type processor.
 # And besides, I'm abusing cerberus so much already it's far past being just a Validator.
 from cerberus import Validator as Processor
+from tqdm import tqdm
 
 
 class MungeFailureException(Exception):
@@ -227,7 +228,7 @@ class Munger:
                 "Must register at least one schema or validator to munge"
             )
 
-        for row in self.source_reader:
+        for row in tqdm(self.source_reader, desc="Munging", unit="rows"):
             try:
                 data = self.munge(row)
             except MungeFailureException:
