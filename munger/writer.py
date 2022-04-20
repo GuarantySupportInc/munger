@@ -1,14 +1,21 @@
 import csv
-from typing import Callable
+from typing import Callable, Iterable
 
 from .munger import Processor
 
 
 class Writer:
-    def __init__(self, filename: str, condition: Callable, include_errors: bool):
+    def __init__(
+        self,
+        filename: str,
+        condition: Callable,
+        include_errors: bool,
+        use_fieldnames: Iterable = None,
+    ):
         self._open_file(filename)
         self.condition = condition
         self.include_errors = include_errors
+        self.fieldnames = use_fieldnames
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
         self.file.close()
@@ -29,7 +36,10 @@ class Writer:
             bool - True if the doc was written
         """
         if not self._fields_initialized:
-            headers = list(processor.document.keys())
+            if self.fieldnames:
+                headers = self.fieldnames
+            else:
+                headers = list(processor.document.keys())
             if self.include_errors:
                 headers.append("ValidationErrors")
             self.writer.fieldnames = headers

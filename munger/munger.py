@@ -130,6 +130,7 @@ class Munger:
         suffix=None,
         condition=None,
         include_errors: bool = False,
+        use_fieldnames: dict = None,
     ):
         """Registers a writer to a specific hook to listen for the given condition, if any.
 
@@ -139,6 +140,7 @@ class Munger:
             suffix = just a suffix to write to
             condition = a function that will be passed the validator object
             include_errors = if True, adds a field ValidationErrors to the end of the writer headers
+            use_fieldnames = if given, these fieldnames will replace the auto-generated fieldnames in the writer
         """
         # Check for prereqs
         if not self._source_data_initialized:
@@ -165,7 +167,9 @@ class Munger:
             Hook.FAILED_COERCION,
             Hook.FAILED_FILTER,
         )
-        writer = Writer(filename, condition, include_errors)
+        writer = Writer(
+            filename, condition, include_errors, use_fieldnames=use_fieldnames
+        )
 
         self.writers[event].append(writer)
 

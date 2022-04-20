@@ -297,3 +297,31 @@ def test_munger_chaining_map_to_and_coercions(mock_writer_open, mock_open):
     result = output.getvalue().replace("\r", "")
     expected = "Field,Frog\n1,A\n2,B\n3,C\n4,D\n"
     assert result == expected
+
+
+@patch("munger.munger.open")
+@patch("munger.writer.open")
+def test_munger_will_overwrite_fieldnames_if_passed(mock_writer_open, mock_open):
+
+    m = Munger()
+
+    mock_open.return_value = StringIO(BASIC_CSV)
+    m.set_source_data("fish.csv")
+    m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
+
+    # register a valid writer
+    output = StringIO()
+    mock_writer_open.return_value = output
+    m.register_writer(
+        Hook.END,
+        filename="output.csv",
+        use_fieldnames=("OtherField", "Field", "BlankField"),
+    )
+
+    # munge the doc
+    m.munge_all()
+
+    # CSV Writer always outputs \r\n
+    result = output.getvalue().replace("\r", "")
+    expected = "OtherField,Field,BlankField\na,1,\nb,2,\nc,3,\nd,4,\n"
+    assert result == expected
