@@ -86,18 +86,22 @@ class Munger:
         self.source_reader = csv.DictReader(self.source_file)
         self._source_data_initialized = True
 
-    def set_schema(
-        self, schema_type: SchemaType, schema: dict, allow_unknown: bool = False
-    ):
-        """Creates a processor of the chosen type using the passed schema"""
+    def set_schema(self, schema_type: SchemaType, schema: dict, **kwargs):
+        """Creates a processor of the chosen type using the passed schema
+
+        Arguments:
+            schema_type (SchemaType): The kind of Processor to create
+            schema (dict): A Cerberus-style schema dict
+            **kwargs: All keyword arguments will be passed directly into the Processor constructor
+        """
         if schema_type == SchemaType.FILTER:
-            self.filterer = Processor(schema, allow_unknown=allow_unknown)
+            self.filterer = Processor(schema, **kwargs)
 
         elif schema_type == SchemaType.COERCE:
-            self.coercer = Processor(schema, allow_unknown=allow_unknown)
+            self.coercer = Processor(schema, **kwargs)
 
         elif schema_type == SchemaType.VALIDATE:
-            self.validator = Processor(schema, allow_unknown=allow_unknown)
+            self.validator = Processor(schema, **kwargs)
 
         else:
             raise TypeError(f"Unrecognized schema type: {schema_type}")
