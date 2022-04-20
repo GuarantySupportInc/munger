@@ -11,6 +11,7 @@ class Processor(cerberus.Validator):
     def _normalize_rename(self, mapping, schema, field):
         """Overriding built-in rename handler to allow lists of fields
 
+        The rule's arguments are validated against this schema:
         {'type': 'hashable'}
         """
         if "rename" in schema[field]:
