@@ -27,6 +27,7 @@ Ideas
 import csv
 from enum import Enum, auto
 from pathlib import Path
+from typing import Callable, Iterable
 
 from tqdm import tqdm
 
@@ -125,22 +126,22 @@ class Munger:
 
     def register_writer(
         self,
-        event,
-        filename=None,
-        suffix=None,
-        condition=None,
+        event: Hook,
+        filename: str = None,
+        suffix: str = None,
+        condition: Callable = None,
         include_errors: bool = False,
-        use_fieldnames: dict = None,
+        use_fieldnames: Iterable = None,
     ):
         """Registers a writer to a specific hook to listen for the given condition, if any.
 
         Arguments:
-            event = the Hook to attach to
-            filename = full str or Path to file to write to
-            suffix = just a suffix to write to
-            condition = a function that will be passed the validator object
-            include_errors = if True, adds a field ValidationErrors to the end of the writer headers
-            use_fieldnames = if given, these fieldnames will replace the auto-generated fieldnames in the writer
+            event (Hook): the Hook to attach to
+            filename (str): full str or Path to file to write to
+            suffix (str): if given, will write to a file with the same name as the source file with this suffix appended
+            condition (Callable): a function that will be passed the validator object
+            include_errors (bool): if True, adds a field ValidationErrors to the end of the writer headers
+            use_fieldnames (Iterable): if given, these fieldnames will replace the auto-generated fieldnames in the writer
         """
         # Check for prereqs
         if not self._source_data_initialized:
