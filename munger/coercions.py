@@ -21,7 +21,11 @@ def truncate(maxlength: int):
 
 ## Date operations
 def datetime_to_format(format: str) -> Callable:
-    """Coercer builder that takes a format and returns a datetime coercion function"""
+    """Coercer builder that takes a format and returns a datetime coercion function
+
+    Arguments:
+        format (str): A Pendulum format string. See https://pendulum.eustace.io/docs/#string-formatting
+    """
 
     def formatter(datetime: str) -> str:
         dt = pendulum.parse(datetime, strict=False)
