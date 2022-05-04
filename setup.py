@@ -6,5 +6,6 @@ setup(
     install_requires=[
         "cerberus",
         "tqdm",
+        "pendulum",
     ],
 )
