@@ -5,6 +5,11 @@ from typing import Callable
 import pendulum
 
 ## Text operations
+def strip(value: str) -> str:
+    """Coercer that behaves just like string.strip()"""
+    return value.strip()
+
+
 def upper(value: str) -> str:
     """Coercer that capitalizes value"""
     return value.upper()
@@ -90,7 +95,7 @@ def insert_base_folder(folder_name: str) -> Callable:
 def extract_file_ext(value: str) -> str:
     """Coercer that extracts the file type from a filename"""
     Path = _detect_filesystem(value)
-    filetype = Path(value).suffix[1:].upper()
+    filetype = Path(value).suffix[1:]
     return filetype
 
 
