@@ -1,5 +1,5 @@
 """Common coercer functions"""
-from pathlib import Path
+from pathlib import PureWindowsPath, PurePosixPath
 from typing import Callable
 
 import pendulum
@@ -35,6 +35,18 @@ def datetime_to_format(format: str) -> Callable:
 
 
 ## Path/filename operations
+def _detect_filesystem(path: str):
+    """Returns PureWindowsPath or PurePosixPath, to allow cross-platform path manipulations
+
+    This kinda sucks to have to do, but trying to parse a Windows
+    path on a Linux box makes Path() act wonky.
+    """
+    if "\\" in path:
+        return PureWindowsPath
+    else:
+        return PurePosixPath
+
+
 def relative_to_folder(path: str) -> Callable:
     """Coercer builder that gets the path relative to the passed folder
 
@@ -42,6 +54,7 @@ def relative_to_folder(path: str) -> Callable:
     """
 
     def _relative_to_folder(value: str) -> str:
+        Path = _detect_filesystem(value)
         p = Path(value)
         return str(p.relative_to(path))
 
@@ -50,6 +63,7 @@ def relative_to_folder(path: str) -> Callable:
 
 def get_parent_folder(path: str) -> str:
     """Coercer that removes the filename from the DocumentPath"""
+    Path = _detect_filesystem(path)
     p = Path(path)
     p = p.parent
     return str(p)
@@ -57,6 +71,7 @@ def get_parent_folder(path: str) -> str:
 
 def get_filename(value: str) -> str:
     """Coercer that extracts the filename from a given path string"""
+    Path = _detect_filesystem(value)
     p = Path(value)
     return p.name
 
@@ -65,6 +80,7 @@ def insert_base_folder(folder_name: str) -> Callable:
     """Coercer builder to insert a target base folder"""
 
     def _insert_base_folder(value: str) -> str:
+        Path = _detect_filesystem(value)
         p = Path(value)
         return str(folder_name / p)
 
@@ -73,6 +89,7 @@ def insert_base_folder(folder_name: str) -> Callable:
 
 def extract_file_ext(value: str) -> str:
     """Coercer that extracts the file type from a filename"""
+    Path = _detect_filesystem(value)
     filetype = Path(value).suffix[1:].upper()
     return filetype
 
