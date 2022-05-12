@@ -19,7 +19,7 @@ def truncate(maxlength: int):
     """Coercer builder that truncates a string to the given maxlength"""
 
     def trunc(value: str) -> str:
-        return value[0:maxlength]
+        return value[:maxlength]
 
     return trunc
 
@@ -46,10 +46,7 @@ def _detect_filesystem(path: str):
     This kinda sucks to have to do, but trying to parse a Windows
     path on a Linux box makes Path() act wonky.
     """
-    if "\\" in path:
-        return PureWindowsPath
-    else:
-        return PurePosixPath
+    return PureWindowsPath if "\\" in path else PurePosixPath
 
 
 def relative_to_folder(path: str) -> Callable:
@@ -95,8 +92,7 @@ def insert_base_folder(folder_name: str) -> Callable:
 def extract_file_ext(value: str) -> str:
     """Coercer that extracts the file type from a filename"""
     Path = _detect_filesystem(value)
-    filetype = Path(value).suffix[1:]
-    return filetype
+    return Path(value).suffix[1:]
 
 
 def to_uds_path(path: str) -> str:
@@ -106,6 +102,6 @@ def to_uds_path(path: str) -> str:
         path = "\\" + path
 
     if path[-1] != "\\":
-        path = path + "\\"
+        path += "\\"
 
     return path
