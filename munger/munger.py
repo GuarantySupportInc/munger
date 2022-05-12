@@ -160,7 +160,7 @@ class Munger:
         # Initialize the writer
         if not filename:
             sf_path = Path(self.source_filename)
-            filename = sf_path.parent / (sf_path.stem + "-" + suffix + sf_path.suffix)
+            filename = sf_path.parent / f"{sf_path.stem}-{suffix}{sf_path.suffix}"
 
         # only include errors for failure hooks
         include_errors = include_errors and event in (

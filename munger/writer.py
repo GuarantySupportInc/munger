@@ -36,10 +36,7 @@ class Writer:
             bool - True if the doc was written
         """
         if not self._fields_initialized:
-            if self.fieldnames:
-                headers = self.fieldnames
-            else:
-                headers = list(processor.document.keys())
+            headers = self.fieldnames or list(processor.document.keys())
             if self.include_errors:
                 headers.append("ValidationErrors")
             self.writer.fieldnames = headers
@@ -51,12 +48,12 @@ class Writer:
         if self.include_errors:
             output["ValidationErrors"] = str(processor.errors)
 
-        if self.condition is None:
+        if (
+            self.condition is not None
+            and self.condition(processor)
+            or self.condition is None
+        ):
             self.writer.writerow(output)
             return True
-        else:
-            if self.condition(processor):
-                self.writer.writerow(output)
-                return True
 
         return False
