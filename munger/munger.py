@@ -132,7 +132,7 @@ class Munger:
         condition: Callable = None,
         include_errors: bool = False,
         use_fieldnames: Iterable = None,
-    ):
+    ) -> None:
         """Registers a writer to a specific hook to listen for the given condition, if any.
 
         Arguments:
