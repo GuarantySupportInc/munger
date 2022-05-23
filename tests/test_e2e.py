@@ -7,12 +7,19 @@ import pytest
 
 from munger.munger import Munger, Hook, SchemaType
 
-BASIC_CSV = "Field,OtherField\n" "1,a\n" "2,b\n" "3,c\n" "4,d\n"
+BASIC_CSV = "Field,OtherField\n1,a\n2,b\n3,c\n4,d\n"
 
 BASIC_VALIDATION_SCHEMA = {
     "Field": {"type": "string"},
     "OtherField": {"type": "string", "maxlength": 1},
 }
+
+
+class UnclosableStringIO(StringIO):
+    """Prevents the StringIO from being closed at the end of munging, which destroys its content"""
+
+    def close(self, *args, **kwargs) -> None:
+        return None
 
 
 @patch("munger.munger.open")
@@ -29,7 +36,7 @@ def test_munger_can_initialize(mock_writer_open, mock_open):
     m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
 
     # register a valid writer
-    mock_writer_open.return_value = StringIO()
+    mock_writer_open.return_value = UnclosableStringIO()
     m.register_writer(Hook.END, filename="output.csv")
 
 
@@ -52,7 +59,8 @@ def test_munger_can_munge_a_simple_doc(mock_writer_open, mock_open):
     m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
 
     # register a valid writer
-    output = StringIO()
+    output = UnclosableStringIO()
+    # hack to prevent the StringIO from closing so we can still read it
     mock_writer_open.return_value = output
     m.register_writer(Hook.END, filename="output.csv")
 
@@ -100,11 +108,11 @@ def test_munger_will_split_writes_according_to_a_condition(mock_writer_open, moc
     def is_even(processor):
         return int(processor.document["Field"]) % 2 == 0
 
-    condition_sio = StringIO()
+    condition_sio = UnclosableStringIO()
     mock_writer_open.return_value = condition_sio
     m.register_writer(Hook.END, filename="condition.csv", condition=is_even)
 
-    valid_sio = StringIO()
+    valid_sio = UnclosableStringIO()
     mock_writer_open.return_value = valid_sio
     m.register_writer(Hook.END, filename="valid.csv")
 
@@ -132,11 +140,11 @@ def test_munger_will_include_errors(mock_writer_open, mock_open):
 
     m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
 
-    valid_sio = StringIO()
+    valid_sio = UnclosableStringIO()
     mock_writer_open.return_value = valid_sio
     m.register_writer(Hook.END, filename="bear.csv")
 
-    invalid_sio = StringIO()
+    invalid_sio = UnclosableStringIO()
     mock_writer_open.return_value = invalid_sio
     m.register_writer(
         Hook.FAILED_VALIDATION, filename="invalid.csv", include_errors=True
@@ -163,7 +171,7 @@ def test_munger_raises_an_exception_if_trying_to_munge_with_no_processors(
     mock_open.return_value = StringIO(BASIC_CSV)
     m.set_source_data("fish.csv")
 
-    mock_writer_open.return_value = StringIO()
+    mock_writer_open.return_value = UnclosableStringIO()
     m.register_writer(Hook.END, filename="output.csv")
 
     with pytest.raises(RuntimeError):
@@ -185,11 +193,11 @@ def test_munger_can_filter_data(mock_writer_open, mock_open):
     filter_schema = {"Field": {"check_with": is_even}}
     m.set_schema(SchemaType.FILTER, filter_schema, allow_unknown=True)
 
-    output = StringIO()
+    output = UnclosableStringIO()
     mock_writer_open.return_value = output
     m.register_writer(Hook.END, filename="output.csv")
 
-    filtered = StringIO()
+    filtered = UnclosableStringIO()
     mock_writer_open.return_value = filtered
     m.register_writer(Hook.FAILED_FILTER, filename="filtered.csv")
 
@@ -216,7 +224,7 @@ def test_munger_inserts_writer_suffixes_into_source_filename(
     mock_open.return_value = StringIO(BASIC_CSV)
     m.set_source_data("../indexes/fish.csv")
 
-    output = StringIO()
+    output = UnclosableStringIO()
     mock_writer_open.return_value = output
     m.register_writer(Hook.END, suffix="cleaned")
 
@@ -242,7 +250,7 @@ def test_munger_maps_fields_to_new_keys(mock_writer_open, mock_open):
     }
     m.set_schema(SchemaType.COERCE, coercion_schema, allow_unknown=True)
 
-    output = StringIO()
+    output = UnclosableStringIO()
     mock_writer_open.return_value = output
     m.register_writer(Hook.END, "munged")
     m.munge_all()
@@ -265,7 +273,7 @@ def test_munger_can_coerce(mock_writer_open, mock_open):
     coercion_schema = {"OtherField": {"coerce": lambda string: string.upper()}}
     m.set_schema(SchemaType.COERCE, coercion_schema, allow_unknown=True)
 
-    output = StringIO()
+    output = UnclosableStringIO()
     mock_writer_open.return_value = output
     m.register_writer(Hook.END, "munged")
     m.munge_all()
@@ -289,7 +297,7 @@ def test_munger_chaining_map_to_and_coercions(mock_writer_open, mock_open):
     }
     m.set_schema(SchemaType.COERCE, coercion_schema, allow_unknown=True)
 
-    output = StringIO()
+    output = UnclosableStringIO()
     mock_writer_open.return_value = output
     m.register_writer(Hook.END, "munged")
     m.munge_all()
@@ -310,7 +318,7 @@ def test_munger_will_overwrite_fieldnames_if_passed(mock_writer_open, mock_open)
     m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
 
     # register a valid writer
-    output = StringIO()
+    output = UnclosableStringIO()
     mock_writer_open.return_value = output
     m.register_writer(
         Hook.END,
@@ -325,3 +333,32 @@ def test_munger_will_overwrite_fieldnames_if_passed(mock_writer_open, mock_open)
     result = output.getvalue().replace("\r", "")
     expected = "OtherField,Field,BlankField\na,1,\nb,2,\nc,3,\nd,4,\n"
     assert result == expected
+
+
+@patch("munger.writer.os.unlink")
+@patch("munger.munger.open")
+@patch("munger.writer.open")
+def test_munger_will_not_leave_files_for_registered_writers_if_nothing_was_written_to_them(
+    mock_writer_open, mock_open, mock_unlink
+):
+    m = Munger()
+
+    mock_open.return_value = StringIO(BASIC_CSV)
+    m.set_source_data("fish.csv")
+    m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
+
+    # register an invalid writer
+    invalid_output = UnclosableStringIO()
+    invalid_output.name = "invalid.csv"
+    mock_writer_open.return_value = invalid_output
+    m.register_writer(Hook.FAILED_VALIDATION, filename="invalid.csv")
+
+    # register a valid writer
+    valid_output = UnclosableStringIO()
+    mock_writer_open.return_value = valid_output
+    m.register_writer(Hook.END, filename="output.csv")
+
+    # munge the doc
+    m.munge_all()
+
+    mock_unlink.assert_called_once_with("invalid.csv")

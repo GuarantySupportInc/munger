@@ -76,7 +76,7 @@ class Munger:
     def _close_all_files(self):
         for _, writers in self.writers.items():
             for writer in writers:
-                writer.file.close()
+                writer.cleanup()
 
         if self._source_data_initialized:
             self.source_file.close()
@@ -205,7 +205,7 @@ class Munger:
             for processor in (self.filterer, self.coercer, self.validator)
         ):
             raise RuntimeError(
-                "Must register at least one schema or validator to munge"
+                "Must register at least one schema or processor to munge"
             )
 
         for row in tqdm(self.source_reader, desc="Munging", unit="rows"):
@@ -213,6 +213,8 @@ class Munger:
                 data = self.munge(row)
             except MungeFailureException:
                 continue
+
+        self._close_all_files()
 
     def filter(self, data):
         filtered = self.filterer.validated(data)

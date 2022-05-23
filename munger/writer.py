@@ -1,4 +1,5 @@
 import csv
+import os
 from typing import Callable, Iterable
 
 from .munger import Processor
@@ -13,21 +14,27 @@ class Writer:
         use_fieldnames: Iterable = None,
     ):
         self._open_file(filename)
+        self._fields_initialized = False
+        self._wrote_line = False
         self.condition = condition
         self.include_errors = include_errors
         self.fieldnames = use_fieldnames
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
-        self.file.close()
+        self.cleanup()
 
     def __del__(self):
-        self.file.close()
+        self.cleanup()
 
-    def _open_file(self, filename: str):
+    def _open_file(self, filename: str) -> None:
         self.file = open(filename, "w")
         # will initialize fieldnames before first write
         self.writer = csv.DictWriter(self.file, fieldnames=[])
-        self._fields_initialized = False
+
+    def cleanup(self) -> None:
+        self.file.close()
+        if not self._wrote_line:
+            os.unlink(self.file.name)
 
     def write(self, processor: Processor) -> bool:
         """Writes the document to file, according to initialized parameters
@@ -53,10 +60,12 @@ class Writer:
 
         if self.condition is None:
             self.writer.writerow(output)
+            self._wrote_line = True
             return True
         else:
             if self.condition(processor):
                 self.writer.writerow(output)
+                self._wrote_line = True
                 return True
 
         return False
