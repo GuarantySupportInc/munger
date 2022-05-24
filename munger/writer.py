@@ -1,6 +1,7 @@
 import csv
 import os
 from typing import Callable, Iterable
+from pathlib import Path
 
 from .munger import Processor
 
@@ -32,8 +33,9 @@ class Writer:
         self.writer = csv.DictWriter(self.file, fieldnames=[])
 
     def cleanup(self) -> None:
-        self.file.close()
-        if not self._wrote_line:
+        if not self.file.closed:
+            self.file.close()
+        if Path(self.file.name).is_file() and not self._wrote_line:
             os.unlink(self.file.name)
 
     def write(self, processor: Processor) -> bool:

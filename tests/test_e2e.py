@@ -18,6 +18,10 @@ BASIC_VALIDATION_SCHEMA = {
 class UnclosableStringIO(StringIO):
     """Prevents the StringIO from being closed at the end of munging, which destroys its content"""
 
+    def __init__(self, *args, **kwargs):
+        self.name = "UnclosableStringIO"
+        super().__init__(*args, **kwargs)
+
     def close(self, *args, **kwargs) -> None:
         return None
 
@@ -335,12 +339,14 @@ def test_munger_will_overwrite_fieldnames_if_passed(mock_writer_open, mock_open)
     assert result == expected
 
 
+@patch("munger.writer.Path")
 @patch("munger.writer.os.unlink")
 @patch("munger.munger.open")
 @patch("munger.writer.open")
 def test_munger_will_not_leave_files_for_registered_writers_if_nothing_was_written_to_them(
-    mock_writer_open, mock_open, mock_unlink
+    mock_writer_open, mock_open, mock_unlink, mock_path
 ):
+    mock_path.is_file.return_value = True
     m = Munger()
 
     mock_open.return_value = StringIO(BASIC_CSV)
@@ -362,3 +368,31 @@ def test_munger_will_not_leave_files_for_registered_writers_if_nothing_was_writt
     m.munge_all()
 
     mock_unlink.assert_called_once_with("invalid.csv")
+
+
+@patch("munger.munger.open")
+@patch("munger.writer.open")
+def test_munger_will_overwrite_fieldnames_if_passed(mock_writer_open, mock_open):
+
+    m = Munger()
+
+    mock_open.return_value = StringIO(BASIC_CSV)
+    m.set_source_data("fish.csv")
+    m.set_schema(SchemaType.VALIDATE, BASIC_VALIDATION_SCHEMA)
+
+    # register a valid writer
+    output = UnclosableStringIO()
+    mock_writer_open.return_value = output
+    m.register_writer(
+        Hook.END,
+        filename="output.csv",
+        use_fieldnames=("OtherField", "Field", "BlankField"),
+    )
+
+    # munge the doc
+    m.munge_all()
+
+    # CSV Writer always outputs \r\n
+    result = output.getvalue().replace("\r", "")
+    expected = "OtherField,Field,BlankField\na,1,\nb,2,\nc,3,\nd,4,\n"
+    assert result == expected
